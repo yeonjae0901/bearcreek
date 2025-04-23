@@ -346,36 +346,36 @@ def check_available_dates(single_run=False):
             
             # 콘솔에 예약 가능한 날짜 출력
             print("\n===== 예약 가능한 날짜 =====")
-            print(f"🏌️ 베어크리크 춘천 5월 예약 가능 알림")
+            print(f"🏌️ 베어크리크 춘천 {MONTH}월 예약 가능 알림")
             
-            # 5월 예약만 필터링
-            may_dates = [date for date in available_dates if date.startswith(f"{YEAR}-05")]
+            # 설정된 월의 예약만 필터링
+            target_month_dates = [date for date in available_dates if date.startswith(f"{YEAR}-{MONTH:02d}")]
             
-            if may_dates:
-                print(f"현재 베어크리크 춘천 골프장에 5월 예약 가능한 날짜가 있습니다!")
+            if target_month_dates:
+                print(f"현재 베어크리크 춘천 골프장에 {MONTH}월 예약 가능한 날짜가 있습니다!")
                 print("\n예약 가능 날짜:")
-                for date in may_dates:
+                for date in target_month_dates:
                     print(f"• {date}")
                     if date in available_times and available_times[date]:
                         print("  이용 가능 시간:")
                         for time_slot in available_times[date]:
                             print(f"  - {time_slot}")
             else:
-                print(f"현재 베어크리크 춘천 골프장에 5월 예약 가능한 날짜가 없습니다.")
+                print(f"현재 베어크리크 춘천 골프장에 {MONTH}월 예약 가능한 날짜가 없습니다.")
             print(f"\n예약 페이지: {BEARCREEK_URL}")
             print(f"알림 시간: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             print("===========================\n")
             
-            # 텔레그램 메시지 발송 (5월 예약만)
-            if may_dates:
-                logger.info(f"5월 예약 가능한 날짜를 {len(may_dates)}개 찾았습니다!")
+            # 텔레그램 메시지 발송 (설정된 월 예약만)
+            if target_month_dates:
+                logger.info(f"{MONTH}월 예약 가능한 날짜를 {len(target_month_dates)}개 찾았습니다!")
                 
                 # 텔레그램 메시지 생성 및 발송
-                telegram_message = f"🏌️ <b>베어크리크 춘천 5월 예약 가능 알림</b>\n\n"
-                telegram_message += f"현재 베어크리크 춘천 골프장에 5월 예약 가능한 날짜가 있습니다!\n\n"
+                telegram_message = f"🏌️ <b>베어크리크 춘천 {MONTH}월 예약 가능 알림</b>\n\n"
+                telegram_message += f"현재 베어크리크 춘천 골프장에 {MONTH}월 예약 가능한 날짜가 있습니다!\n\n"
                 telegram_message += "<b>예약 가능 날짜:</b>\n"
                 
-                for date in may_dates:
+                for date in target_month_dates:
                     telegram_message += f"• <b>{date}</b>\n"
                     
                     # 해당 날짜의 예약 가능 시간 추가
@@ -383,7 +383,7 @@ def check_available_dates(single_run=False):
                         telegram_message += "  <u>이용 가능 시간:</u>\n"
                         for time_slot in available_times[date]:
                             telegram_message += f"  - {time_slot}\n"
-                
+                    
                 telegram_message += f"\n예약 페이지: {BEARCREEK_URL}\n"
                 telegram_message += f"알림 시간: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 
@@ -397,7 +397,7 @@ def check_available_dates(single_run=False):
                     logger.error(f"텔레그램 메시지 발송 중 예외 발생: {str(e)}")
                     logger.warning("텔레그램 메시지 발송은 실패했지만, 위 콘솔 출력에서 예약 가능한 날짜를 확인할 수 있습니다.")
             else:
-                logger.info("5월에 예약 가능한 날짜가 없습니다. 텔레그램 알림 생략.")
+                logger.info(f"{MONTH}월에 예약 가능한 날짜가 없습니다. 텔레그램 알림 생략.")
         except Exception as e:
             logger.error(f"달력 확인 중 오류 발생: {str(e)}")
             driver.save_screenshot("date_check_error.png")
