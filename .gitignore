@@ -1,0 +1,18 @@
+# 가상환경
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 로그 및 스크린샷
+*.log
+*.png
+page_source.html
+
+# 환경 변수
+.env
+
+# 기타
+.DS_Store
+.idea/
+.vscode/ 
