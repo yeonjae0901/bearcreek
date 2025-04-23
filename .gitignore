@@ -1,8 +1,10 @@
 # 가상환경
 venv/
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
+*.log
+*.png
+*.html
 
 # 로그 및 스크린샷
 *.log

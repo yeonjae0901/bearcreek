@@ -90,6 +90,9 @@ def setup_driver():
     chrome_options.add_argument("--disable-features=NetworkService")
     chrome_options.add_argument("--dns-prefetch-disable")
     
+    # DevTools 관련 오류 해결을 위한 설정
+    chrome_options.add_argument("--remote-debugging-port=9222")
+    
     # 웹사이트에서 자동화 감지를 우회하기 위한 설정
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
