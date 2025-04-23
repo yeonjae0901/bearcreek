@@ -185,6 +185,7 @@ def check_available_dates(single_run=False):
     
     driver = None
     available_dates = []
+    available_times = {}  # 날짜별 예약 가능 시간을 저장할 딕셔너리
     
     try:
         driver = setup_driver()
@@ -220,6 +221,11 @@ def check_available_dates(single_run=False):
                     title = td.get_attribute('title')
                     logger.info(f"예약가능 td의 title: '{title}'")
                     
+                    # href 속성에서 날짜 정보 추출 시도
+                    a_tag = td.find_element(By.TAG_NAME, 'a')
+                    onclick_attr = a_tag.get_attribute('onclick')
+                    logger.info(f"클릭 이벤트: {onclick_attr}")
+                    
                     # 날짜 추출
                     import re
                     
@@ -231,6 +237,34 @@ def check_available_dates(single_run=False):
                         if date_str not in available_dates:
                             available_dates.append(date_str)
                             logger.info(f"예약 가능한 날짜 찾음 (title년월일): {date_str}")
+                            
+                            # 날짜 클릭하여 시간 정보 가져오기
+                            a_tag.click()
+                            logger.info(f"{date_str} 날짜 클릭됨, 시간 정보 로딩 중...")
+                            time.sleep(5)  # 시간 정보가 로드될 때까지 기다림
+                            
+                            try:
+                                # 시간 정보 추출
+                                time_rows = driver.find_elements(By.XPATH, "//table[@class='table-body']//tr")
+                                time_info = []
+                                
+                                for row in time_rows:
+                                    try:
+                                        course = row.find_element(By.XPATH, "./td[1]").text.strip()
+                                        tee_time = row.find_element(By.XPATH, "./td[2]").text.strip()
+                                        price = row.find_element(By.XPATH, "./td[4]").text.strip()
+                                        time_info.append(f"{course} {tee_time} ({price}원)")
+                                        logger.info(f"시간 정보 추출: {course} {tee_time} ({price}원)")
+                                    except Exception as e:
+                                        logger.warning(f"시간 정보 행 처리 중 오류: {str(e)}")
+                                
+                                if time_info:
+                                    available_times[date_str] = time_info
+                                    logger.info(f"{date_str}에 {len(time_info)}개의 이용 가능 시간 찾음")
+                                else:
+                                    logger.warning(f"{date_str}에 이용 가능한 시간 정보를 찾지 못함")
+                            except Exception as e:
+                                logger.error(f"시간 정보 추출 중 오류: {str(e)}")
                         continue
                     
                     # MM월 DD일 패턴 추출
@@ -241,6 +275,34 @@ def check_available_dates(single_run=False):
                         if date_str not in available_dates:
                             available_dates.append(date_str)
                             logger.info(f"예약 가능한 날짜 찾음 (title월일): {date_str}")
+                            
+                            # 날짜 클릭하여 시간 정보 가져오기
+                            a_tag.click()
+                            logger.info(f"{date_str} 날짜 클릭됨, 시간 정보 로딩 중...")
+                            time.sleep(5)  # 시간 정보가 로드될 때까지 기다림
+                            
+                            try:
+                                # 시간 정보 추출
+                                time_rows = driver.find_elements(By.XPATH, "//table[@class='table-body']//tr")
+                                time_info = []
+                                
+                                for row in time_rows:
+                                    try:
+                                        course = row.find_element(By.XPATH, "./td[1]").text.strip()
+                                        tee_time = row.find_element(By.XPATH, "./td[2]").text.strip()
+                                        price = row.find_element(By.XPATH, "./td[4]").text.strip()
+                                        time_info.append(f"{course} {tee_time} ({price}원)")
+                                        logger.info(f"시간 정보 추출: {course} {tee_time} ({price}원)")
+                                    except Exception as e:
+                                        logger.warning(f"시간 정보 행 처리 중 오류: {str(e)}")
+                                
+                                if time_info:
+                                    available_times[date_str] = time_info
+                                    logger.info(f"{date_str}에 {len(time_info)}개의 이용 가능 시간 찾음")
+                                else:
+                                    logger.warning(f"{date_str}에 이용 가능한 시간 정보를 찾지 못함")
+                            except Exception as e:
+                                logger.error(f"시간 정보 추출 중 오류: {str(e)}")
                         continue
                     
                     # DD일 패턴 추출
@@ -251,6 +313,34 @@ def check_available_dates(single_run=False):
                         if date_str not in available_dates:
                             available_dates.append(date_str)
                             logger.info(f"예약 가능한 날짜 찾음 (title일): {date_str}")
+                            
+                            # 날짜 클릭하여 시간 정보 가져오기
+                            a_tag.click()
+                            logger.info(f"{date_str} 날짜 클릭됨, 시간 정보 로딩 중...")
+                            time.sleep(5)  # 시간 정보가 로드될 때까지 기다림
+                            
+                            try:
+                                # 시간 정보 추출
+                                time_rows = driver.find_elements(By.XPATH, "//table[@class='table-body']//tr")
+                                time_info = []
+                                
+                                for row in time_rows:
+                                    try:
+                                        course = row.find_element(By.XPATH, "./td[1]").text.strip()
+                                        tee_time = row.find_element(By.XPATH, "./td[2]").text.strip()
+                                        price = row.find_element(By.XPATH, "./td[4]").text.strip()
+                                        time_info.append(f"{course} {tee_time} ({price}원)")
+                                        logger.info(f"시간 정보 추출: {course} {tee_time} ({price}원)")
+                                    except Exception as e:
+                                        logger.warning(f"시간 정보 행 처리 중 오류: {str(e)}")
+                                
+                                if time_info:
+                                    available_times[date_str] = time_info
+                                    logger.info(f"{date_str}에 {len(time_info)}개의 이용 가능 시간 찾음")
+                                else:
+                                    logger.warning(f"{date_str}에 이용 가능한 시간 정보를 찾지 못함")
+                            except Exception as e:
+                                logger.error(f"시간 정보 추출 중 오류: {str(e)}")
                 except Exception as e:
                     logger.warning(f"예약가능 td 처리 중 오류: {str(e)}")
             
@@ -266,6 +356,10 @@ def check_available_dates(single_run=False):
                 print("\n예약 가능 날짜:")
                 for date in may_dates:
                     print(f"• {date}")
+                    if date in available_times and available_times[date]:
+                        print("  이용 가능 시간:")
+                        for time_slot in available_times[date]:
+                            print(f"  - {time_slot}")
             else:
                 print(f"현재 베어크리크 춘천 골프장에 5월 예약 가능한 날짜가 없습니다.")
             print(f"\n예약 페이지: {BEARCREEK_URL}")
@@ -282,7 +376,13 @@ def check_available_dates(single_run=False):
                 telegram_message += "<b>예약 가능 날짜:</b>\n"
                 
                 for date in may_dates:
-                    telegram_message += f"• {date}\n"
+                    telegram_message += f"• <b>{date}</b>\n"
+                    
+                    # 해당 날짜의 예약 가능 시간 추가
+                    if date in available_times and available_times[date]:
+                        telegram_message += "  <u>이용 가능 시간:</u>\n"
+                        for time_slot in available_times[date]:
+                            telegram_message += f"  - {time_slot}\n"
                 
                 telegram_message += f"\n예약 페이지: {BEARCREEK_URL}\n"
                 telegram_message += f"알림 시간: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
