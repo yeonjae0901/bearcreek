@@ -40,13 +40,16 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 # MONTH와 YEAR 환경변수 로드 및 기본값 설정
 try:
-    MONTH = int(os.getenv('MONTH', 4))
+    MONTH = int(os.getenv('MONTH', 5))
 except ValueError:
     # 환경변수에 주석이 포함된 경우 처리
-    month_str = os.getenv('MONTH', '4')
+    month_str = os.getenv('MONTH', '5')
     if '#' in month_str:
         month_str = month_str.split('#')[0].strip()
     MONTH = int(month_str)
+
+# 월 설정 값 강제 지정
+MONTH = 5
 
 try:
     YEAR = int(os.getenv('YEAR', 2025))
@@ -273,34 +276,79 @@ def check_available_dates(single_run=False):
                     
                     # 클릭할 날짜 요소 다시 찾기
                     date_xpath = f"//td[contains(@title, '{date_str.replace('-', '년 ', 1).replace('-', '월 ')}일')]//a"
-                    date_element = driver.find_element(By.XPATH, date_xpath)
+                    logger.info(f"날짜 요소 찾는 XPath: {date_xpath}")
                     
-                    # 날짜 클릭
-                    date_element.click()
-                    logger.info(f"{date_str} 날짜 클릭됨, 시간 정보 로딩 중...")
-                    time.sleep(5)  # 시간 정보가 로드될 때까지 기다림
-                    
-                    # 시간 정보 추출
-                    time_rows = driver.find_elements(By.XPATH, "//table[@class='table-body']//tr")
-                    time_info = []
-                    
-                    for row in time_rows:
-                        try:
-                            course = row.find_element(By.XPATH, "./td[1]").text.strip()
-                            tee_time = row.find_element(By.XPATH, "./td[2]").text.strip()
-                            price = row.find_element(By.XPATH, "./td[4]").text.strip()
-                            time_info.append(f"{course} {tee_time} ({price}원)")
-                            logger.info(f"시간 정보 추출: {course} {tee_time} ({price}원)")
-                        except Exception as e:
-                            logger.warning(f"시간 정보 행 처리 중 오류: {str(e)}")
-                    
-                    if time_info:
-                        available_times[date_str] = time_info
-                        logger.info(f"{date_str}에 {len(time_info)}개의 이용 가능 시간 찾음")
-                    else:
-                        logger.warning(f"{date_str}에 이용 가능한 시간 정보를 찾지 못함")
+                    try:
+                        date_element = WebDriverWait(driver, 10).until(
+                            EC.element_to_be_clickable((By.XPATH, date_xpath))
+                        )
+                        # 날짜 클릭
+                        driver.execute_script("arguments[0].click();", date_element)
+                        logger.info(f"{date_str} 날짜 클릭됨, 시간 정보 로딩 중...")
+                        
+                        # 시간 정보가 로드될 때까지 충분히 기다림
+                        time.sleep(10)
+                        
+                        # 시간 정보 추출 전에 디버깅을 위한 스크린샷 저장
+                        driver.save_screenshot(f"time_info_{date_str.replace('-', '_')}.png")
+                        logger.info(f"시간 정보 페이지 스크린샷 저장: time_info_{date_str.replace('-', '_')}.png")
+                        
+                        # 시간 정보 테이블 로딩 대기
+                        WebDriverWait(driver, 15).until(
+                            EC.presence_of_element_located((By.XPATH, "//table[@class='table-body']"))
+                        )
+                        
+                        # 현재 페이지 소스 저장 (디버깅 용)
+                        with open(f"time_page_{date_str.replace('-', '_')}.html", "w", encoding="utf-8") as f:
+                            f.write(driver.page_source)
+                        logger.info(f"시간 정보 페이지 소스 저장: time_page_{date_str.replace('-', '_')}.html")
+                        
+                        # 시간 테이블 찾기 시도 (여러 가능한 XPath 패턴 사용)
+                        time_rows = []
+                        xpath_patterns = [
+                            "//table[@class='table-body']//tr",
+                            "//table[contains(@class, 'table')]//tr[position()>1]",
+                            "//div[contains(@class, 'time-table')]//table//tr",
+                            "//div[contains(@id, 'timeTable')]//table//tr"
+                        ]
+                        
+                        for pattern in xpath_patterns:
+                            time_rows = driver.find_elements(By.XPATH, pattern)
+                            if time_rows:
+                                logger.info(f"시간 정보 행 찾음 ({len(time_rows)}개): {pattern}")
+                                break
+                        
+                        time_info = []
+                        
+                        if time_rows:
+                            for row in time_rows:
+                                try:
+                                    cells = row.find_elements(By.TAG_NAME, "td")
+                                    if len(cells) >= 4:
+                                        course = cells[0].text.strip()
+                                        tee_time = cells[1].text.strip()
+                                        price = cells[3].text.strip()
+                                        
+                                        if course and tee_time:  # 의미 있는 데이터인지 확인
+                                            time_info.append(f"{course} {tee_time} ({price}원)")
+                                            logger.info(f"시간 정보 추출: {course} {tee_time} ({price}원)")
+                                except Exception as e:
+                                    logger.warning(f"시간 정보 행 처리 중 오류: {str(e)}")
+                        else:
+                            logger.warning(f"{date_str}에 대한 시간 정보 테이블을 찾을 수 없습니다.")
+                        
+                        if time_info:
+                            available_times[date_str] = time_info
+                            logger.info(f"{date_str}에 {len(time_info)}개의 이용 가능 시간 찾음")
+                        else:
+                            logger.warning(f"{date_str}에 이용 가능한 시간 정보를 찾지 못함")
+                        
+                    except Exception as e:
+                        logger.error(f"날짜 요소 클릭 또는 시간 정보 테이블 대기 중 오류: {str(e)}")
+                        driver.save_screenshot(f"click_error_{date_str.replace('-', '_')}.png")
                 except Exception as e:
                     logger.error(f"{date_str} 시간 정보 추출 중 오류: {str(e)}")
+                    driver.save_screenshot(f"time_error_{date_str.replace('-', '_')}.png")
             
             # 콘솔에 예약 가능한 날짜 출력
             print("\n===== 예약 가능한 날짜 =====")
