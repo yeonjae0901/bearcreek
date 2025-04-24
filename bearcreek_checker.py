@@ -9,6 +9,9 @@ import schedule
 import asyncio
 import platform
 import sys
+import pytz
+import uuid
+import random
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -20,6 +23,22 @@ from dotenv import load_dotenv
 from telegram import Bot
 from telegram.error import TelegramError
 
+# 한국 시간대 설정
+KST = pytz.timezone('Asia/Seoul')
+
+# 로깅 시간 포맷터 클래스 - 한국 시간으로 변환
+class KSTFormatter(logging.Formatter):
+    def converter(self, timestamp):
+        dt = datetime.datetime.fromtimestamp(timestamp, tz=pytz.UTC)
+        return dt.astimezone(KST)
+    
+    def formatTime(self, record, datefmt=None):
+        dt = self.converter(record.created)
+        if datefmt:
+            return dt.strftime(datefmt)
+        else:
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+
 # 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
@@ -29,6 +48,11 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+# 모든 핸들러에 KST 포맷터 적용
+for handler in logging.getLogger().handlers:
+    handler.setFormatter(KSTFormatter('%(asctime)s - %(levelname)s - %(message)s'))
+
 logger = logging.getLogger(__name__)
 
 # 환경 변수 로드
@@ -75,55 +99,48 @@ BEARCREEK_URL = "https://www.bearcreek.co.kr/Reservation/Reservation.aspx?strLGu
 
 def setup_driver():
     """Selenium 웹드라이버 설정"""
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")  # GUI 없이 실행
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--lang=ko_KR")
-    chrome_options.add_argument("--disable-browser-side-navigation")
-    chrome_options.add_argument("--disable-infobars")
-    chrome_options.add_argument("--disable-dev-tools")
-    
-    # 로딩 속도 개선을 위한 추가 설정
-    chrome_options.add_argument("--disable-features=site-per-process")
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--blink-settings=imagesEnabled=true")
-    chrome_options.add_argument("--disable-features=NetworkService")
-    chrome_options.add_argument("--dns-prefetch-disable")
-    
-    # DevTools 관련 오류 해결을 위한 설정
-    chrome_options.add_argument("--remote-debugging-port=9222")
-    
-    # 웹사이트에서 자동화 감지를 우회하기 위한 설정
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option('useAutomationExtension', False)
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    
-    # 실제 Chrome 브라우저와 유사한 사용자 에이전트 설정
-    chrome_options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36")
-    
     try:
-        # MacOS에서 시스템에 설치된 ChromeDriver 사용
-        if platform.system() == "Darwin":  # macOS
-            chrome_driver_path = "/usr/local/bin/chromedriver"
-            service = Service(executable_path=chrome_driver_path)
-        else:
-            # Linux나 Windows 환경
+        # 기존 크롬 관련 프로세스 및 임시 폴더 정리
+        try:
+            os.system("pkill -f chrome 2>/dev/null")
+            os.system("pkill -f chromium 2>/dev/null")
+            os.system("rm -rf /tmp/chrome* /tmp/*profile* /tmp/chromedata* 2>/dev/null")
+            logger.info("기존 Chrome 프로세스 및 임시 파일 정리 완료")
+        except Exception as e:
+            logger.warning(f"Chrome 정리 중 오류 (무시됨): {str(e)}")
+        
+        # Chrome 옵션 설정 - 최소한의 옵션만 사용
+        chrome_options = Options()
+        chrome_options.binary_location = "/usr/bin/chromium-browser"
+        
+        # 핵심 옵션만 설정
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        
+        # 드라이버 생성
+        try:
+            # Linux 서버 환경
             service = Service()
-        
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        
-        # 자동화 감지 관련 JavaScript 속성 수정
-        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        
-        # 페이지 로딩 타임아웃 설정 증가 (기본값에서 60초로)
-        driver.set_page_load_timeout(60)
-        
-        return driver
+            logger.info("Chrome 드라이버 생성 중...")
+            
+            # 고유한 데이터 디렉토리 설정
+            temp_dir = f"/tmp/chromedata-{time.time()}-{random.randint(10000, 99999)}"
+            os.makedirs(temp_dir, exist_ok=True)
+            chrome_options.add_argument(f"--user-data-dir={temp_dir}")
+            
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            
+            # 페이지 로딩 타임아웃 설정
+            driver.set_page_load_timeout(60)
+            
+            logger.info("Chrome 드라이버 설정 완료")
+            return driver
+        except Exception as e:
+            logger.error(f"ChromeDriver 설정 중 오류 발생: {str(e)}")
+            raise
     except Exception as e:
-        logger.error(f"ChromeDriver 설정 중 오류 발생: {str(e)}")
+        logger.error(f"Chrome 드라이버 설정 중 심각한 오류: {str(e)}")
         raise
 
 
@@ -185,6 +202,20 @@ def send_telegram_notification(message):
 def check_available_dates(single_run=False):
     """베어크리크 골프장 예약 가능 날짜 확인"""
     logger.info("베어크리크 골프장 예약 확인을 시작합니다...")
+    
+    # 디스크 공간 확인
+    try:
+        statvfs = os.statvfs("/")
+        free_space_mb = (statvfs.f_frsize * statvfs.f_bavail) / (1024 * 1024)
+        used_percent = 100 - (statvfs.f_bavail / statvfs.f_blocks * 100)
+        logger.info(f"디스크 여유 공간: {free_space_mb:.2f}MB ({used_percent:.1f}% 사용 중)")
+        
+        # 디스크 여유 공간이 500MB 미만이면 임시 파일 정리
+        if free_space_mb < 500:
+            logger.warning("디스크 여유 공간이 부족합니다. 임시 파일 정리를 시도합니다.")
+            os.system("rm -rf /tmp/chrome* /tmp/*profile* /tmp/*.png /tmp/*.html 2>/dev/null")
+    except Exception as e:
+        logger.error(f"디스크 공간 확인 중 오류: {str(e)}")
     
     driver = None
     available_dates = []
@@ -289,60 +320,51 @@ def check_available_dates(single_run=False):
                         # 시간 정보가 로드될 때까지 충분히 기다림
                         time.sleep(10)
                         
-                        # 시간 정보 추출 전에 디버깅을 위한 스크린샷 저장
-                        driver.save_screenshot(f"time_info_{date_str.replace('-', '_')}.png")
-                        logger.info(f"시간 정보 페이지 스크린샷 저장: time_info_{date_str.replace('-', '_')}.png")
+                        # 해당 날짜에 대한 시간 정보 페이지 스크린샷 저장
+                        screenshot_file = f"time_info_{date_str}.png"
+                        driver.save_screenshot(screenshot_file)
+                        logger.info(f"시간 정보 페이지 스크린샷 저장: {screenshot_file}")
                         
-                        # 시간 정보 테이블 로딩 대기
-                        WebDriverWait(driver, 15).until(
-                            EC.presence_of_element_located((By.XPATH, "//table[@class='table-body']"))
-                        )
-                        
-                        # 현재 페이지 소스 저장 (디버깅 용)
-                        with open(f"time_page_{date_str.replace('-', '_')}.html", "w", encoding="utf-8") as f:
+                        # 페이지 소스 저장
+                        html_file = f"time_page_{date_str}.html"
+                        with open(html_file, "w", encoding="utf-8") as f:
                             f.write(driver.page_source)
-                        logger.info(f"시간 정보 페이지 소스 저장: time_page_{date_str.replace('-', '_')}.html")
+                        logger.info(f"시간 정보 페이지 소스 저장: {html_file}")
                         
-                        # 시간 테이블 찾기 시도 (여러 가능한 XPath 패턴 사용)
-                        time_rows = []
-                        xpath_patterns = [
-                            "//table[@class='table-body']//tr",
-                            "//table[contains(@class, 'table')]//tr[position()>1]",
-                            "//div[contains(@class, 'time-table')]//table//tr",
-                            "//div[contains(@id, 'timeTable')]//table//tr"
-                        ]
+                        # 시간 정보 행 찾기
+                        time_rows = driver.find_elements(By.XPATH, "//table[@class='table-body']//tr")
                         
-                        for pattern in xpath_patterns:
-                            time_rows = driver.find_elements(By.XPATH, pattern)
-                            if time_rows:
-                                logger.info(f"시간 정보 행 찾음 ({len(time_rows)}개): {pattern}")
-                                break
+                        if not time_rows:
+                            logger.info(f"{date_str}에 예약 가능한 시간이 없거나 이미 예약된 상태입니다. 건너뜁니다.")
+                            continue
                         
+                        logger.info(f"시간 정보 행 찾음 ({len(time_rows)}개): //table[@class='table-body']//tr")
+                        
+                        # 시간 정보 추출 및 저장
                         time_info = []
-                        
-                        if time_rows:
-                            for row in time_rows:
-                                try:
-                                    cells = row.find_elements(By.TAG_NAME, "td")
-                                    if len(cells) >= 4:
-                                        course = cells[0].text.strip()
-                                        tee_time = cells[1].text.strip()
-                                        price = cells[3].text.strip()
-                                        
-                                        if course and tee_time:  # 의미 있는 데이터인지 확인
-                                            time_info.append(f"{course} {tee_time} ({price}원)")
-                                            logger.info(f"시간 정보 추출: {course} {tee_time} ({price}원)")
-                                except Exception as e:
-                                    logger.warning(f"시간 정보 행 처리 중 오류: {str(e)}")
-                        else:
-                            logger.warning(f"{date_str}에 대한 시간 정보 테이블을 찾을 수 없습니다.")
+                        for row in time_rows:
+                            try:
+                                cells = row.find_elements(By.TAG_NAME, "td")
+                                if len(cells) >= 4:
+                                    course = cells[0].text.strip()
+                                    tee_time = cells[1].text.strip()
+                                    price = cells[3].text.strip()
+                                    
+                                    if course and tee_time:  # 의미 있는 데이터인지 확인
+                                        time_info.append(f"{course} {tee_time} ({price}원)")
+                                        logger.info(f"시간 정보 추출: {course} {tee_time} ({price}원)")
+                            except Exception as e:
+                                logger.warning(f"시간 정보 행 처리 중 오류: {str(e)}")
                         
                         if time_info:
                             available_times[date_str] = time_info
                             logger.info(f"{date_str}에 {len(time_info)}개의 이용 가능 시간 찾음")
                         else:
                             logger.warning(f"{date_str}에 이용 가능한 시간 정보를 찾지 못함")
-                        
+                            # 시간 정보가 없으면 예약 가능한 날짜에서 제외
+                            if date_str in available_dates:
+                                available_dates.remove(date_str)
+                                logger.info(f"{date_str}는 시간 정보가 없어 예약 가능한 날짜에서 제외되었습니다.")
                     except Exception as e:
                         logger.error(f"날짜 요소 클릭 또는 시간 정보 테이블 대기 중 오류: {str(e)}")
                         driver.save_screenshot(f"click_error_{date_str.replace('-', '_')}.png")
@@ -421,6 +443,18 @@ def check_available_dates(single_run=False):
         # 드라이버 종료
         if driver:
             driver.quit()
+        
+        # 임시 파일 정리
+        try:
+            logger.info("임시 파일 정리 중...")
+            os.system("rm -rf /tmp/chrome* /tmp/*profile* /tmp/chromedata* 2>/dev/null")
+            # 현재 디렉토리의 오래된 PNG 및 HTML 파일 정리 (7일 이상)
+            os.system("find . -name '*.png' -mtime +7 -delete 2>/dev/null")
+            os.system("find . -name '*.html' -mtime +7 -delete 2>/dev/null")
+            logger.info("임시 파일 정리 완료")
+        except Exception as e:
+            logger.warning(f"임시 파일 정리 중 오류 (무시됨): {str(e)}")
+            
         logger.info("베어크리크 골프장 예약 확인이 완료되었습니다.")
         
         # 단일 실행 모드인 경우 종료
